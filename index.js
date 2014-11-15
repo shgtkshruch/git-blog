@@ -11,51 +11,49 @@ function clone () {
 }
 
 var opt = {cwd: __dirname + '/' + repo};
-var log = spawn('git', ['log', '--pretty=oneline', '--reverse'], opt);
+var log = spawn('git', ['log', '--reverse', '--pretty=oneline'] , opt);
 var catCommit = function (commitId) {
  return spawn('git', ['cat-file', 'commit', commitId], opt); 
 };
 var lsTree = function (treeId) {
-  return spawn('git', ['ls-tree', treeId], opt);
+  return spawn('git', ['ls-tree', '-r', treeId], opt);
 };
 var catFile = function (blobId) {
   return spawn('git', ['cat-file', 'blob', blobId], opt);
 };
 
-function commit (cmt) {
+function commit (cmt, next) {
   str(catCommit(cmt.sha), function (data) {
     var sha = data.match(/^tree\s([\d\w]{40})(?:\nparent\s([\d\w]{40}))?(?:\n.+){2}\n\n(.+(?:\n\n.+)?)/);
     cmt.treeSha = sha[1];
-    // cmt.parentSha = sha[2];
     cmt.msg = sha[3];
-    tree(cmt);
+    tree(cmt, next);
   });
 }
 
-function tree (obj) {
-  var istree = Boolean(obj.type === 'tree');
-  var sha = istree ? obj.sha : obj.treeSha;
-
-  str(lsTree(sha), function (_data) {
+function tree (obj, next) {
+  str(lsTree(obj.treeSha), function (_data) {
     var data = _data.split('\n').slice(0, -1);
-    data.forEach(function (d) {
+    async.each(data, function (d, _next) {
       var _obj = {};
-      var info = d.match(/^\d{6}\s(\w+)\s([\d\w]{40})\t([.\d\w].+)$/);
-      _obj.cmt = istree ? obj.cmt : obj.sha;
-      _obj.type = info[1];
-      _obj.sha = info[2];
-      _obj.fp = istree ? obj.fp + '/' + info[3] : info[3];
-      _obj.type === 'blob' ?  blob(_obj) : tree(_obj);
+      var info = d.match(/^\d{6}\s\w+\s([\d\w]{40})\t([.\d\w].+)$/);
+      _obj.cmt = obj.sha;
+      _obj.sha = info[1];
+      _obj.fp = info[2];
+      blob(_obj, _next);
+    }, function (err) {
+      if (err) throw err;
+      next();
     });
   });
 }
 
-function blob (obj) {
+function blob (obj, next) {
   str(catFile(obj.sha), function (data) {
-    delete obj.type;
     delete obj.sha;
     obj.content = data;
     console.log(obj);
+    next();
   });
 }
 
@@ -75,9 +73,11 @@ function getCommits (cb) {
   });
 }
 
-getCommits(function (cmts) {
-  cmts.forEach(function (cmt) {
-    commit(cmt);
+getCommits(function (commits) {
+  async.eachSeries(commits, function (cmt, next) {
+    commit(cmt, next);
+  }, function (err) {
+    if (err) throw err;
   });
 });
 
@@ -96,8 +96,15 @@ function print (git) {
 }
 
 function str (git, cb) {
+  var buf = '';
+
   git.stdout.on('data', function (data) {
-    cb(toStr(data));
+    buf += data;
+  });
+
+  git.on('close', function (code) {
+    if (code !== 0) console.log('code', code);
+    cb(toStr(buf));
   });
 }
 
