@@ -22,38 +22,45 @@ var catFile = function (blobId) {
   return spawn('git', ['cat-file', 'blob', blobId], opt);
 };
 
+var r = [];
+
 function commit (cmt, next) {
   str(catCommit(cmt.sha), function (data) {
-    var sha = data.match(/^tree\s([\d\w]{40})(?:\nparent\s([\d\w]{40}))?(?:\n.+){2}\n\n(.+(?:\n\n.+)?)/);
+    var sha = data.match(/^tree\s([\d\w]{40})(?:\n.+){2,3}\n\n(.+(?:\n\n.+)?)/);
     cmt.treeSha = sha[1];
-    cmt.msg = sha[3];
+    cmt.msg = sha[2];
     tree(cmt, next);
   });
 }
 
 function tree (obj, next) {
+  var blobs = [];
   str(lsTree(obj.treeSha), function (_data) {
+    delete obj.treeSha;
     var data = _data.split('\n').slice(0, -1);
     async.each(data, function (d, _next) {
       var _obj = {};
       var info = d.match(/^\d{6}\s\w+\s([\d\w]{40})\t([.\d\w].+)$/);
-      _obj.cmt = obj.sha;
       _obj.sha = info[1];
       _obj.fp = info[2];
-      blob(_obj, _next);
+      blob(_obj, function (blob) {
+        blobs.push(blob);
+        _next();
+      });
     }, function (err) {
       if (err) throw err;
+      obj.blobs = blobs;
+      r.push(obj);
       next();
     });
   });
 }
 
-function blob (obj, next) {
+function blob (obj, cb) {
   str(catFile(obj.sha), function (data) {
     delete obj.sha;
     obj.content = data;
-    console.log(obj);
-    next();
+    cb(obj);
   });
 }
 
@@ -78,6 +85,7 @@ getCommits(function (commits) {
     commit(cmt, next);
   }, function (err) {
     if (err) throw err;
+    console.log(util.inspect(r, {depth: 3}));
   });
 });
 
