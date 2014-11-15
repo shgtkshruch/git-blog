@@ -1,72 +1,76 @@
-var spawn = require('child_process').spawn;
 var util = require('util');
+var spawn = require('child_process').spawn;
 var async = require('async');
 var user = 'shgtkshruch';
 var repo = 'git-blog-demo';
-
-function clone () {
-  var reponame = 'git@github.com:' + user + '/' + repo + '.git';
-  var gitClone = spawn('git', ['clone', reponame]);
-  print(gitClone);
-}
-
-var opt = {cwd: __dirname + '/' + repo};
-var log = spawn('git', ['log', '--reverse', '--pretty=oneline'] , opt);
-var catCommit = function (commitId) {
- return spawn('git', ['cat-file', 'commit', commitId], opt); 
-};
-var lsTree = function (treeId) {
-  return spawn('git', ['ls-tree', '-r', treeId], opt);
-};
-var catFile = function (blobId) {
-  return spawn('git', ['cat-file', 'blob', blobId], opt);
-};
-
 var r = [];
 
-function commit (cmt, next) {
-  str(catCommit(cmt.sha), function (data) {
-    var sha = data.match(/^tree\s([\d\w]{40})(?:\n.+){2,3}\n\n(.+(?:\n\n.+)?)/);
-    cmt.treeSha = sha[1];
-    cmt.msg = sha[2];
-    tree(cmt, next);
+function git (cmd, cb) {
+  var opt = {cwd: __dirname + '/' + repo};
+  var _git = spawn('git', cmd, opt);
+  var buf = '';
+
+  _git.stdout.on('data', function (data) {
+    buf += data;
+  });
+
+  _git.on('close', function (code) {
+    if (code !== 0) console.log('code', code);
+    var data = new Buffer(buf).toString();
+    cb(data);
   });
 }
 
-function tree (obj, next) {
+function clone () {
+  var reponame = 'git@github.com:' + user + '/' + repo + '.git';
+  git(['clone', reponame], function (data) {
+    console.log(data);
+  });
+}
+
+function getCommit (cmt, next) {
+  git(['cat-file', 'commit', cmt.sha], function (data) {
+    var stat = data.match(/^tree\s([\d\w]{40})(?:\n.+){2,3}\n\n(.+(?:\n\n.+)?)/);
+    cmt.ish = stat[1];
+    cmt.msg = stat[2];
+    getBlobs(cmt, next);
+  });
+}
+
+function getBlobs (cmt, next) {
   var blobs = [];
-  str(lsTree(obj.treeSha), function (_data) {
-    delete obj.treeSha;
+  git(['ls-tree', '-r', cmt.ish], function (_data) {
+    delete cmt.ish;
     var data = _data.split('\n').slice(0, -1);
     async.each(data, function (d, _next) {
-      var _obj = {};
-      var info = d.match(/^\d{6}\s\w+\s([\d\w]{40})\t([.\d\w].+)$/);
-      _obj.sha = info[1];
-      _obj.fp = info[2];
-      blob(_obj, function (blob) {
+      var blob = {};
+      var stat = d.match(/^\d{6}\s\w+\s([\d\w]{40})\t([.\d\w].+)$/);
+      blob.sha = stat[1];
+      blob.fp = stat[2];
+      getContent(blob, function (blob) {
         blobs.push(blob);
         _next();
       });
     }, function (err) {
       if (err) throw err;
-      obj.blobs = blobs;
-      r.push(obj);
+      cmt.blobs = blobs;
+      r.push(cmt);
       next();
     });
   });
 }
 
-function blob (obj, cb) {
-  str(catFile(obj.sha), function (data) {
-    delete obj.sha;
-    obj.content = data;
-    cb(obj);
+function getContent (blob, cb) {
+  git(['cat-file', 'blob', blob.sha], function (data) {
+    delete blob.sha;
+    blob.content = data;
+    cb(blob);
   });
 }
 
 function getCommits (cb) {
   var commits = [];
-  str(log, function (_data) {
+  git(['log', '--reverse', '--pretty=oneline'], function (_data) {
     var data = _data.split('\n').slice(0, -1);
     async.eachSeries(data, function (d, next) {
       var cmt = {};
@@ -80,43 +84,15 @@ function getCommits (cb) {
   });
 }
 
-getCommits(function (commits) {
-  async.eachSeries(commits, function (cmt, next) {
-    commit(cmt, next);
-  }, function (err) {
-    if (err) throw err;
-    console.log(util.inspect(r, {depth: 3}));
-  });
-});
-
-function print (git) {
-  git.stdout.on('data', function (data) {
-    console.log(toStr(data));
-  });
-
-  git.stderr.on('data', function (data) {
-    console.log(toStr(data));
-  });
-
-  git.on('close', function (data) {
-    console.log(data);
+function run () {
+  getCommits(function (commits) {
+    async.eachSeries(commits, function (cmt, next) {
+      getCommit(cmt, next);
+    }, function (err) {
+      if (err) throw err;
+      console.log(util.inspect(r, {depth: 3}));
+    });
   });
 }
 
-function str (git, cb) {
-  var buf = '';
-
-  git.stdout.on('data', function (data) {
-    buf += data;
-  });
-
-  git.on('close', function (code) {
-    if (code !== 0) console.log('code', code);
-    cb(toStr(buf));
-  });
-}
-
-function toStr (buf) {
-  return new Buffer(buf).toString();
-}
-
+run();
