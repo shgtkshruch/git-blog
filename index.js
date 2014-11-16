@@ -54,8 +54,11 @@ function getBlobs (cmt, next) {
     }, function (err) {
       if (err) throw err;
       cmt.blobs = blobs;
-      r.push(cmt);
-      next();
+      getDiff(cmt, function (diff) {
+        cmt.diff = diff;
+        r.push(cmt);
+        next();
+      });
     });
   });
 }
@@ -80,6 +83,33 @@ function getCommits (cb) {
     }, function (err) {
       if (err) throw err;
       cb(commits);
+    });
+  });
+}
+
+function getDiff (cmt, cb) {
+  git(['show', '--pretty=oneline', cmt.sha], function (data) {
+    var diff = [];
+    var diffs = data.split(/diff\s--git.+\n/).slice(1);
+    async.eachSeries(diffs, function (dif, next) {
+      var f = {};
+      f.fp = dif.match(/\n[+-]{3}\sb\/(.+)\n/)[1];
+      f.delta = dif.match(/@@\s([-\+\d,\s]+)\s@@/)[1];
+      f.diff = '';
+      var lines = dif.split('\n');
+      async.eachSeries(lines, function (line, _next) {
+        if (!/^[[+-]{3}|@@|new|index|]/.test(line)) {
+          f.diff += line;
+        }
+        _next();
+      }, function (err) {
+        if (err) throw err;
+        diff.push(f);
+        next();
+      });
+    }, function (err) {
+      if (err) throw err;
+      cb(diff);
     });
   });
 }
