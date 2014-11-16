@@ -114,15 +114,13 @@ function getDiff (cmt, cb) {
   });
 }
 
-function run () {
+module.exports = function (cb) {
   getCommits(function (commits) {
     async.eachSeries(commits, function (cmt, next) {
       getCommit(cmt, next);
     }, function (err) {
       if (err) throw err;
-      console.log(util.inspect(r, {depth: 3}));
+      cb(r);
     });
   });
-}
-
-run();
+};
