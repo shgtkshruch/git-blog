@@ -2,7 +2,7 @@ var util = require('util');
 var spawn = require('child_process').spawn;
 var async = require('async');
 var user = 'shgtkshruch';
-var repo = 'git-blog-demo';
+var repo = 'simple-modal-window';
 var r = [];
 
 function git (cmd, cb) {
@@ -90,11 +90,15 @@ function getCommits (cb) {
 function getDiff (cmt, cb) {
   git(['show', '--pretty=oneline', cmt.sha], function (data) {
     var diff = [];
-    var diffs = data.split(/diff\s--git.+\n/).slice(1);
+    var diffs = data.split(/\ndiff\s/).slice(1);
     async.eachSeries(diffs, function (dif, next) {
       var f = {};
-      f.fp = dif.match(/\n[+-]{3}\sb\/(.+)\n/)[1];
-      f.delta = dif.match(/@@\s([-\+\d,\s]+)\s@@/)[1];
+      f.fp = dif.match(/--git\sa\/[\w\d\.\/]+\sb\/([\w\d\.\/]+)\n/)[1];
+      try {
+        f.delta = dif.match(/@@\s([-\+\d,\s]+)\s@@/)[1];
+      } catch (e) {
+        f.delta = '-0,0 +0,0';
+      }
       f.diff = '';
       var lines = dif.split('\n');
       async.eachSeries(lines, function (line, _next) {
