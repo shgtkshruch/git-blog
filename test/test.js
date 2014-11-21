@@ -1,23 +1,24 @@
 var assert = require('assert');
 var fs = require('fs');
 var getDiff = require('../lib/git/diff.js');
+var createFiles = require('../lib/git/createFiles');
+var rimraf = require('rimraf');
 
 describe('git-blog', function () {
+  var diff;
+
+  before(function (done) {
+    var data = fs.readFileSync('./test/stub.txt', {encoding: 'utf-8'});
+    getDiff(data, function (_diff) {
+      diff = _diff;
+      done();
+    });
+  });
 
   describe('diff', function () {
-    var diff;
-
-    before(function (done) {
-      var data = fs.readFileSync('./test/stub.txt', {encoding: 'utf-8'});
-      getDiff(data, function (_diff) {
-        diff = _diff;
-        done();
-      });
-    });
-
     it('should have expected file path', function () {
       diff.forEach(function (file) {
-        assert.deepEqual(file.fp, 'app/styles/style.scss');
+        assert.deepEqual(file.path, 'app/styles/style.scss');
       });
     });
 
@@ -35,6 +36,24 @@ describe('git-blog', function () {
           assert.deepEqual(chunk.body, ' p {\n   color: red;\n+  font-size: 16px;\n }\n');
         });
       });
+    });
+  });
+
+  describe('create files', function () {
+    before(function (done) {
+      diff.forEach(function (file) {
+        createFiles(file);
+      });
+      done();
+    });
+
+    it('should create expeced files', function () {
+      assert.deepEqual(fs.existsSync('./app/styles/style.scss'), true);
+    });
+
+    after(function (done) {
+      rimraf.sync('./app');
+      done();
     });
   });
 });
