@@ -88,32 +88,10 @@ function getCommits (cb) {
 }
 
 function getDiff (cmt, cb) {
-  git(['show', '--pretty=oneline', cmt.sha], function (data) {
-    var diff = [];
-    var diffs = data.split(/\ndiff\s/).slice(1);
-    async.eachSeries(diffs, function (dif, next) {
-      var f = {};
-      f.fp = dif.match(/--git\sa\/[\w\d\.\/]+\sb\/([\w\d\.\/]+)\n/)[1];
-      try {
-        f.delta = dif.match(/@@\s([-\+\d,\s]+)\s@@/)[1];
-      } catch (e) {
-        f.delta = '-0,0 +0,0';
-      }
-      f.diff = '';
-      var lines = dif.split('\n');
-      async.eachSeries(lines, function (line, _next) {
-        if (!/^[[+-]{3}|@@|new|index|]/.test(line)) {
-          f.diff += line;
-        }
-        _next();
-      }, function (err) {
-        if (err) throw err;
-        diff.push(f);
-        next();
-      });
-    }, function (err) {
-      if (err) throw err;
-      cb(diff);
+  var get = require('./lib/git/diff');
+  git(['show', '--pretty=oneline', cmt.sha], function (diff) {
+    get(diff, function (result) {
+      cb(result);
     });
   });
 }
