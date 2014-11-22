@@ -50,10 +50,10 @@ describe('git-blog', function () {
     it('should create expeced files', function () {
       assert.deepEqual(fs.existsSync('./app/styles/style.scss'), true);
     });
+  });
 
-    after(function (done) {
-      rimraf.sync('./app');
-      done();
-    });
+  after(function (done) {
+    rimraf.sync('./app');
+    done();
   });
 });
