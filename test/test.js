@@ -49,7 +49,7 @@ describe('git-blog', function () {
       });
 
       it('should create expeced files', function () {
-        assert.deepEqual(fs.existsSync('./app/styles/style.scss'), true);
+        assert.deepEqual(fs.existsSync('./app/styles/style.html'), true);
       });
     });
   });
