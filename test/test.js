@@ -16,39 +16,41 @@ describe('git-blog', function () {
   });
 
   describe('diff', function () {
-    it('should have expected file path', function () {
-      diff.forEach(function (file) {
-        assert.deepEqual(file.path, 'app/styles/style.scss');
+    describe('get diff from git data', function () {
+      it('should have expected file path', function () {
+        diff.forEach(function (file) {
+          assert.deepEqual(file.path, 'app/styles/style.scss');
+        });
       });
-    });
 
-    it('should have expected diff address', function () {
-      diff.forEach(function (file) {
-        file.diff.forEach(function (chunk) {
-          assert.deepEqual(chunk.num, '-1,3 +1,4');
+      it('should have expected diff address', function () {
+        diff.forEach(function (file) {
+          file.chunks.forEach(function (chunk) {
+            assert.deepEqual(chunk.num, '-1,3 +1,4');
+          });
+        });
+      });
+
+      it('should have expected diff body', function () {
+        diff.forEach(function (file) {
+          file.chunks.forEach(function (chunk) {
+            assert.deepEqual(chunk.body, ' p {\n   color: red;\n+  font-size: 16px;\n }\n');
+          });
         });
       });
     });
 
-    it('should have expected diff body', function () {
-      diff.forEach(function (file) {
-        file.diff.forEach(function (chunk) {
-          assert.deepEqual(chunk.body, ' p {\n   color: red;\n+  font-size: 16px;\n }\n');
+    describe('create files from diff data', function () {
+      before(function (done) {
+        diff.forEach(function (file) {
+          createFiles(file);
+          done();
         });
       });
-    });
-  });
 
-  describe('create files', function () {
-    before(function (done) {
-      diff.forEach(function (file) {
-        createFiles(file);
+      it('should create expeced files', function () {
+        assert.deepEqual(fs.existsSync('./app/styles/style.scss'), true);
       });
-      done();
-    });
-
-    it('should create expeced files', function () {
-      assert.deepEqual(fs.existsSync('./app/styles/style.scss'), true);
     });
   });
 
